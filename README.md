@@ -1,4 +1,4 @@
-# The Colorado Sound Playlist Bot
+# The Colorado Sound Playlist Bot V2
 
 This is a bot that posts the current song playing on KJAC 105.5 FM, The Colorado Sound, to Mastodon. It also follows the "Buy on iTunes" link on their playlist site, https://coloradosound.org/colorado-sound-playlist/ , and posts the album art if available.
 
