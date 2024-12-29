@@ -33,7 +33,7 @@ def write_state(file_path, id):
     return
 
 
-# Reads the state from teh state file
+# Reads the state from the state file
 def read_state(file_path):
     try:
         with open(file_path, 'r') as file:
@@ -87,6 +87,44 @@ def get_config(working_directory):
         print(f"JSON decoding error: {e}")
     except Exception as e:
         print(f"An error occurred: {e}")
+
+
+def fetch_album_artwork(artist, album):
+        """
+        Fetches album artwork from the specified API and stores it in a variable.
+        
+        Args:
+            artist (str): The name of the artist.
+            album (str): The name of the album.
+        
+        Returns:
+            tuple: A tuple containing a status (success or error message) and the image data (if successful).
+        """
+        api_url = f"http://black-pi.local:5002/get_artwork?artist={artist}&album={album}"
+        
+        try:
+            response = requests.get(api_url, stream=True)
+        
+            if response.status_code == 200:
+                content_type = response.headers.get("Content-Type", "")
+        
+                if "application/json" in content_type:
+                    # Handle JSON error response
+                    error_message = response.json().get("error", "Unknown error occurred.")
+                    return {"status": f"Error from API: {error_message}", "image_data": None}
+        
+                elif "image" in content_type:
+                    # Store binary image data in a variable
+                    image_data = b"".join(response.iter_content(1024))
+                    return {"status": "Album artwork successfully fetched.", "image_data": image_data}
+        
+                else:
+                    return {"status": "Unexpected content type received from API.", "image_data": None}
+            else:
+                return {"status": f"Failed to fetch artwork: HTTP {response.status_code}", "image_data": None}
+        
+        except requests.exceptions.RequestException as e:
+            return {"status": f"Request failed: {str(e)}", "image_data": None}
 
 
 def get_now_playing_from_api(url):
@@ -194,17 +232,30 @@ def post_to_mastodon(current_song, server, access_token):
     # text_to_post += "\n" + make_hashtags(current_song["artistName"], current_song["trackName"], current_song["dj"], config["hashtags"])
     # print(text_to_post)
     alt_text = "An image of the cover of the record album '" + current_song["collectionName"] + "' by " + current_song["artistName"]
-
-    # Check if there's an image included. If there is, post it
-    if current_song["cover_art_available"]:
-    # URL of the image you want to attach
-        image_data = requests.get(current_song["itunes_artwork_url"]).content
+    
+    album_art_api_result = fetch_album_artwork(current_song["artistName"], current_song["collectionName"])
+    pprint(album_art_api_result['status'])
+    print("******* New Code running.")
+    
+    if album_art_api_result["image_data"]:
+        image_data = album_art_api_result["image_data"]
         # Upload the image and attach it to the status
         media = mastodon.media_post(image_data, mime_type='image/jpeg', description=alt_text)
         # Post the status with text and image attachment
         mastodon.status_post(status=text_to_post, media_ids=[media['id']], visibility="public")
     else:
         mastodon.status_post(status=text_to_post, visibility="public")
+
+    # Check if there's an image included. If there is, post it
+    # if current_song["cover_art_available"]:
+    # # URL of the image you want to attach
+    #     image_data = requests.get(current_song["itunes_artwork_url"]).content
+    #     # Upload the image and attach it to the status
+    #     media = mastodon.media_post(image_data, mime_type='image/jpeg', description=alt_text)
+    #     # Post the status with text and image attachment
+    #     mastodon.status_post(status=text_to_post, media_ids=[media['id']], visibility="public")
+    # else:
+    #     mastodon.status_post(status=text_to_post, visibility="public")
     print(f"***** Posted ID: {current_song['trackName']} by {current_song['artistName']} to Mastodon at {formatted_datetime}")
     return
 
@@ -216,25 +267,31 @@ def call_api_and_post():
     state_file = working_directory + "/state"
     # Get the latest ID written to the state file
     last_post = read_state(state_file)
+    
+    current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
     if current_song["id"] != last_post and len(current_song["artistName"]) > 0 and len(current_song["collectionName"]) > 0:
+        
         current_song["itunes_artwork_url"] = get_artwork_link_from_apple(current_song["itunes_link"])
+        
         post_to_mastodon(current_song, config["mastodon_server"], config["mastodon_access_token"])
         write_state(state_file, current_song["id"])
         write_database(current_song, working_directory + "/" + config["database"])
 
     else:
-        print(f"***** SKIPPED Song: {current_song['trackName']} Artist: {current_song['artistName']} Album: {current_song['collectionName']}. {formatted_datetime}")
+        print(f"***** SKIPPED Song: {current_song['trackName']} Artist: {current_song['artistName']} Album: {current_song['collectionName']}. {current_time}")
 
     return
 
 
 def check_playlist_and_post():
+    current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     # Get the information about the current song playing
     current_song = get_current_song(config["playlist_url"])
     # Getting info from API:
     song = get_now_playing_from_api(config["api_url"])
-    pprint(build_current_song(song))
+    # pprint(build_current_song(song))
+    # print("******* New Code running.")
     # ########
     state_file = working_directory + "/state"
     # Get the latest ID written to the state file
@@ -245,11 +302,12 @@ def check_playlist_and_post():
     if current_song["id"] != last_post and current_song["is_song"]:
         # Make sure we got a good scrape of playlist page
         if current_song["id"] == "notfound":
-            print(f"***** Latest song not found.  {formatted_datetime}")
+            print(f"***** Latest song not found.  {current_time}")
         else:
             if current_song["cover_art_available"]:
                 # Follow the iTunes link to get a URL for the artwork. Stick it into current_song{}
                 thumbnail_url = get_artwork_link_from_apple(current_song["itunes_link"])
+                # thumbnail_url = ""
                 if len(thumbnail_url) > 10:
 
                     current_song["itunes_artwork_url"] = thumbnail_url
@@ -265,7 +323,7 @@ def check_playlist_and_post():
             write_state(state_file, current_song["id"])
             write_database(current_song, working_directory + "/" + config["database"])
     else:
-        print(f"***** Song: {current_song['trackName']} skipped. {formatted_datetime}")
+        print(f"***** Song: {current_song['trackName']} skipped. {current_time}")
 
 
 
@@ -275,7 +333,7 @@ current_datetime = datetime.now()
 formatted_datetime = current_datetime.strftime("%A, %B %d, %Y %I:%M:%S %p")
 if len(sys.argv) > 1:
     working_directory = sys.argv[1]
-    print (f"{working_directory} provided")
+    print (f"{working_directory} provided as working directory.")
     config = get_config(working_directory)
 else:
     print("No working directory argument provided. Exiting.\n")
@@ -283,9 +341,12 @@ else:
 
 for i in range(0, config["times_to_poll_per_minute"] - 1):
     check_playlist_and_post()
+    print(f"*** In iteration {i} of the cycle.")
+    print(datetime.now())
     # call_api_and_post()
     # Don't sleep after the last run 
     if i < (config["times_to_poll_per_minute"] - 1):
         time.sleep(60 / config["times_to_poll_per_minute"])
+
 
 
