@@ -22,7 +22,6 @@ def read_state(file_path):
 		with open(file_path, 'r') as file:
 			state = file.readline().strip()  # Read the first line and remove leading/trailing whitespace
 	# If it fails, we don't have a state file yet. So make one.
-	# This assumption is possibly dangerous. Time will tell.
 	except:
 		state = "starting up"
 		write_state(file_path, state)
@@ -114,7 +113,7 @@ def post_to_mastodon(config, current_song):
 		api_base_url=config["mastodon_server"]
 	)
 	# Text content to post
-	text_to_post = current_song["time_played"] + " " + current_song["song"] + " by " + current_song["artist"] + " from " + current_song["album"]
+	text_to_post = current_song["time_played"] + " " + current_song["song"] + " by " + current_song["artist"] + " from " + current_song["album"] + "\n" + config["hashtags"]
 	alt_text = "An image of the cover of the album '" + current_song["album"] + "' by " + current_song["artist"]	
 	album_art_api_result = fetch_image(current_song["album_art"])
 	# If we successfully got a cover image, process it
@@ -152,7 +151,11 @@ if __name__ == "__main__":
 	else:
 		print("No working directory argument provided. Exiting.\n")
 		sys.exit()
-		
+	
+	# For a variety of reasons, this script is kicked off by a cron job that runs every minute.
+	# But we want to check for new songs more frequently that once a minute. So we have a configuration
+	# value times_to_poll_per_minute. This loops the number of times specified by that value.
+	# It sounds hokey, but it's simple and stable as heck.
 	for i in range(0, config["times_to_poll_per_minute"] ):
 		now_playing = fetch_current_song(config["plalist_uri"])
 		# Stick the working directory into the now_playing array to simplify calling functions
