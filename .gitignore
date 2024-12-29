@@ -5,7 +5,7 @@ cron_log.txt
 cronlog.txt
 playlist.db
 state
-
+last_mastodon_post
 
 # EVERYTHING BELOW WAS THE GITHUB DEFAULT PYTHON STUFF:
 #
