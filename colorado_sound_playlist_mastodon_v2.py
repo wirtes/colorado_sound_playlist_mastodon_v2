@@ -4,9 +4,20 @@ import time
 import sys
 import json
 import requests
+import re
+from unidecode import unidecode
 from mastodon import Mastodon
 from datetime import datetime
 from pprint import pprint
+
+
+# Cleanse the string
+def make_hastag(string):
+	# Using unidecode to convertion UTF-8 diacriticals to standard ASCII because people probably won't type them in hashtags
+	text = unidecode(string)
+	# Remove any special characters, new lines, and spaces
+	clean_text = "#" + re.sub(r'[^a-zA-Z0-9]', '', text.replace('\n', '').replace(' ', ''))
+	return clean_text
 
 
 # Writes the state file
@@ -113,7 +124,12 @@ def post_to_mastodon(config, current_song):
 		api_base_url=config["mastodon_server"]
 	)
 	# Text content to post
-	text_to_post = current_song["time_played"] + " " + current_song["song"] + " by " + current_song["artist"] + " from " + current_song["album"] + "\n" + config["hashtags"]
+	text_to_post = current_song["time_played"] + " " + current_song["song"] + " by " + current_song["artist"] 
+	# Occasionally there's no album info, don't put the "by" in when this happens
+	if len(current_song["album"]) > 0:
+		text_to_post += " from " + current_song["album"]
+	# Add some hashtags on a new line
+	text_to_post += "\n" + config["hashtags"] + " " + make_hastag(current_song["artist"])
 	alt_text = "An image of the cover of the album '" + current_song["album"] + "' by " + current_song["artist"]	
 	album_art_api_result = fetch_image(current_song["album_art"])
 	# If we successfully got a cover image, process it
@@ -170,7 +186,7 @@ if __name__ == "__main__":
 			elif len(now_playing["artist"]) > 0 and len(now_playing["album"]) == 0:
 				# We're waiting for album art in the feed
 				print("*** Pausing 10 seconds for album art to catch up")
-				time.sleep(10)
+				time.sleep(15)
 				now_playing_second_try = fetch_current_song(config["plalist_uri"])
 				post_to_mastodon_preflight(config, now_playing)
 			else:
