@@ -6,6 +6,8 @@ cronlog.txt
 playlist.db
 state
 last_mastodon_post
+colorado_sound_playlist_mastodon_v2-a.py
+
 
 # EVERYTHING BELOW WAS THE GITHUB DEFAULT PYTHON STUFF:
 #
